@@ -1,42 +1,40 @@
-# Java Gradle CircleCI 2.0 configuration file
-#
-# Check https://circleci.com/docs/2.0/language-java/ for more details
-#
 version: 2
 jobs:
   build:
+    working_directory: ~/terminal
     docker:
-      # specify the version you desire here
-      - image: circleci/openjdk:8-jdk
-
-      # Specify service dependencies here if necessary
-      # CircleCI maintains a library of pre-built images
-      # documented at https://circleci.com/docs/2.0/circleci-images/
-      # - image: circleci/postgres:9.4
-
-    working_directory: ~/repo
-
+      - image: xploitednoob/build-apk:latest
     environment:
-      # Customize the JVM maximum heap limit
-      JVM_OPTS: -Xmx3200m
-      TERM: dumb
-
+          JVM_OPTS: -Xmx3200m
+          TERM: dumb
+          ANDROID_HOME: /home/builder/lib/android-sdk
+          ANDROID_SDK_ROOT: /home/builder/lib/android-sdk
     steps:
       - checkout
-
-      # Download and cache dependencies
-      - restore_cache:
-          keys:
-            - v1-dependencies-{{ checksum "build.gradle" }}
-            # fallback to using the latest cache if no exact match is found
-            - v1-dependencies-
-
-      - run: gradle dependencies
-
-      - save_cache:
-          paths:
-            - ~/.gradle
-          key: v1-dependencies-{{ checksum "build.gradle" }}
-
-      # run tests!
-      - run: gradle test
+      - run:
+          name: Install SDK Packages
+          command: |
+            echo 'sdk.dir=/home/builder/lib/android-sdk' >> local.properties
+            echo 'ndk.dir=/home/builder/lib/android-ndk' >> local.properties
+            ./tools/install-sdk-packages
+      - run:
+          name: Build Debug APK
+          command: ./gradlew assembleDebug
+      - run:
+          name: Build Release APK
+          command: ./gradlew assembleRelease
+      - run:
+          name: Sign Generated APKs
+          command: |
+            git clone http://github.com/xploitednoob/signapk.git
+            cd term/build/outputs/apk
+            java -jar /home/builder/terminal/signapk/signapk.jar /home/builder/terminal/signapk/publickey.x509.pem /home/builder/terminal/signapk/publickey.pk8 term-release-unsigned.apk terminal-release.apk
+            java -jar /home/builder/terminal/signapk/signapk.jar /home/builder/terminal/signapk/publickey.x509.pem /home/builder/terminal/signapk/publickey.pk8 term-debug.apk terminal-debug.apk
+      - store_artifacts:
+          name: Store Release APK
+          path: ./term/build/outputs/apk/terminal-release.apk
+          destination: terminal-release.apk
+      - store_artifacts:
+          name: Store Debug APK
+          path: ./term/build/outputs/apk/terminal-debug.apk
+          destination: terminal-debug.apk
